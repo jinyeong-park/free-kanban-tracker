@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler pages dev ."
+    "dev": "wrangler pages dev .",
+    "build": "echo \"No build required for this static site\"",
+    "deploy": "wrangler pages deploy ."
   }
 }

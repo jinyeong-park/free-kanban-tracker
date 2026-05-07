@@ -1,4 +1,12 @@
-# 🚀 CoreStep: Free Kanban To-Do List & Job Tracker | JYNLAB
+# 🚀 JYNLAB: Free Kanban To-Do List & Job Tracker
+
+update cloudflare
+
+```
+pnpm run deploy
+or
+wrangler pages deploy .
+```
 
 > **Daily Tasks, Career Milestones. One Board.**
 
