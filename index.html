@@ -522,6 +522,7 @@
   .gcal-connect-btn:hover { background: rgba(255,255,255,0.25); }
   .gcal-status { font-size: 10px; color: rgba(255,255,255,0.6); }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -632,6 +633,15 @@
 </div>
 
 <script>
+// ── WEEK STRIP ────────────────────────────────────────
+const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // Google Cloud Console에서 발급한 OAuth Client ID로 교체
+const GOOGLE_SCOPES    = 'https://www.googleapis.com/auth/calendar.readonly';
+
+let weekOffset     = 0;   // 0 = 이번주, -1 = 지난주, +1 = 다음주
+let googleToken    = null;
+let calendarEvents = [];
+let tokenClient    = null;
+
 // ── DATA ──────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
   { id: 'todo',      label: 'To Do' },
@@ -1282,21 +1292,102 @@ function exportLog() {
 }
 
 function showPage(page) {
-  const board = document.getElementById('board');
-  const logPage = document.getElementById('logPage');
+  const board    = document.getElementById('board');
+  const logPage  = document.getElementById('logPage');
+  const strip    = document.getElementById('weekStrip');
   const btnBoard = document.getElementById('btnBoard');
-  const btnLog = document.getElementById('btnLog');
+  const btnLog   = document.getElementById('btnLog');
   if (page === 'log') {
-    board.style.display = 'none';
+    board.style.display   = 'none';
+    strip.style.display   = 'none';
     logPage.classList.add('open');
     btnBoard.classList.remove('active');
     btnLog.classList.add('active');
     renderLog();
   } else {
-    board.style.display = '';
+    board.style.display   = '';
+    strip.style.display   = '';
     logPage.classList.remove('open');
     btnBoard.classList.add('active');
     btnLog.classList.remove('active');
+    renderWeekStrip();
+  }
+}
+
+function getWeekDays(offset) {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=일, 1=월...
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7) + offset * 7);
+  monday.setHours(0, 0, 0, 0);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+function getCardsForDate(isoDateStr) {
+  // card.date는 ISO 형식 (YYYY-MM-DD)이어야 매칭됨. 레거시 텍스트 형식은 무시.
+  return cards.filter(c => c.date === isoDateStr && c.col !== 'done');
+}
+
+function renderWeekStrip() {
+  const el = document.getElementById('weekDays');
+  if (!el) return;
+
+  const days     = getWeekDays(weekOffset);
+  const todayStr = todayISO();
+  const names    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  el.innerHTML = days.map((d, i) => {
+    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const isToday = iso === todayStr;
+
+    const dayCards = getCardsForDate(iso);
+    const dayEvents = calendarEvents.filter(e => {
+      const start = e.start.dateTime || e.start.date || '';
+      return start.startsWith(iso);
+    });
+
+    const chips = [];
+
+    dayCards.slice(0, 2).forEach(c => {
+      chips.push(`<div class="week-chip kanban" title="${c.title}">${c.title}</div>`);
+    });
+
+    dayEvents.slice(0, 2).forEach(e => {
+      let label = e.summary || '(no title)';
+      if (e.start.dateTime) {
+        const t = new Date(e.start.dateTime);
+        const hh = String(t.getHours()).padStart(2,'0');
+        const mm = String(t.getMinutes()).padStart(2,'0');
+        label = `${hh}:${mm} ${label}`;
+      }
+      chips.push(`<div class="week-chip gcal" title="${e.summary || ''}">${label}</div>`);
+    });
+
+    const total = dayCards.length + dayEvents.length;
+    const shown = Math.min(dayCards.length, 2) + Math.min(dayEvents.length, 2);
+    if (total > shown) {
+      chips.push(`<div class="week-chip more">+${total - shown}</div>`);
+    }
+
+    return `
+      <div class="week-day-col${isToday ? ' today' : ''}">
+        <div class="week-day-name">${names[i]}</div>
+        <div class="week-day-num">${d.getDate()}</div>
+        <div class="week-chips">${chips.join('')}</div>
+      </div>`;
+  }).join('');
+}
+
+function changeWeek(delta) {
+  weekOffset += delta;
+  if (googleToken) {
+    fetchCalendarEvents().then(() => renderWeekStrip());
+  } else {
+    renderWeekStrip();
   }
 }
 
@@ -1687,6 +1778,105 @@ if ('serviceWorker' in navigator) {
 // ── INIT ──────────────────────────────────────────────
 renderBoardTabs();
 renderAll();
+
+// ── GOOGLE CALENDAR ───────────────────────────────────
+function updateGcalUI(connected) {
+  const btn    = document.getElementById('gcalConnectBtn');
+  const status = document.getElementById('gcalStatus');
+  if (!btn || !status) return;
+  if (connected) {
+    btn.textContent = '✕ Disconnect';
+    btn.onclick     = disconnectGoogle;
+    status.textContent = '✅ Connected';
+  } else {
+    btn.textContent = '🔗 Connect Google Calendar';
+    btn.onclick     = connectGoogle;
+    status.textContent = '';
+  }
+}
+
+function handleGoogleToken(response) {
+  if (response.error) {
+    console.error('Google auth error:', response.error);
+    return;
+  }
+  googleToken = response.access_token;
+  sessionStorage.setItem('gcal_token', googleToken);
+  updateGcalUI(true);
+  fetchCalendarEvents().then(() => renderWeekStrip());
+}
+
+function connectGoogle() {
+  if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+    alert('Google Client ID가 설정되지 않았습니다.\nindex.html의 GOOGLE_CLIENT_ID 상수를 채워주세요.');
+    return;
+  }
+  if (!tokenClient) {
+    if (typeof google === 'undefined') {
+      alert('Google SDK가 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope:     GOOGLE_SCOPES,
+      callback:  handleGoogleToken,
+    });
+  }
+  tokenClient.requestAccessToken();
+}
+
+function disconnectGoogle() {
+  if (googleToken && typeof google !== 'undefined') {
+    google.accounts.oauth2.revoke(googleToken, () => {});
+  }
+  googleToken    = null;
+  calendarEvents = [];
+  tokenClient    = null;
+  sessionStorage.removeItem('gcal_token');
+  updateGcalUI(false);
+  renderWeekStrip();
+}
+
+async function fetchCalendarEvents() {
+  if (!googleToken) return;
+  const days  = getWeekDays(weekOffset);
+  const start = days[0].toISOString();
+  const end   = new Date(days[6]);
+  end.setHours(23, 59, 59, 999);
+
+  try {
+    const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?' +
+      `timeMin=${encodeURIComponent(start)}` +
+      `&timeMax=${encodeURIComponent(end.toISOString())}` +
+      `&singleEvents=true&orderBy=startTime&maxResults=50`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${googleToken}` }
+    });
+
+    if (res.status === 401) {
+      disconnectGoogle();
+      return;
+    }
+
+    const data = await res.json();
+    calendarEvents = data.items || [];
+  } catch (e) {
+    console.error('Calendar fetch failed:', e);
+    calendarEvents = [];
+  }
+}
+
+// ── WEEK STRIP INIT ───────────────────────────────────
+document.getElementById('weekStrip').style.display = '';
+renderWeekStrip();
+
+const _savedToken = sessionStorage.getItem('gcal_token');
+if (_savedToken) {
+  googleToken = _savedToken;
+  updateGcalUI(true);
+  fetchCalendarEvents().then(() => renderWeekStrip());
+}
 </script>
 </body>
 </html>
