@@ -419,11 +419,38 @@
   .week-strip {
     background: rgba(0,0,0,0.18);
     backdrop-filter: blur(6px);
-    padding: 8px 20px;
+    padding: 8px 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+  .week-strip-inner {
     display: flex;
     align-items: stretch;
     gap: 0;
+    flex: 1;
+    min-height: 60px;
+    overflow: hidden;
+    padding-bottom: 8px;
   }
+  .week-strip-resize {
+    height: 6px;
+    cursor: ns-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .week-strip-resize::before {
+    content: '';
+    width: 40px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.25);
+    transition: background 0.2s;
+  }
+  .week-strip-resize:hover::before { background: rgba(255,255,255,0.55); }
   .week-nav-btn {
     background: rgba(255,255,255,0.12);
     border: none;
@@ -482,6 +509,7 @@
     gap: 2px;
     width: 100%;
     align-items: stretch;
+    overflow: hidden;
   }
   .week-chip {
     font-size: 10px;
@@ -562,13 +590,16 @@
 
 <!-- WEEK STRIP -->
 <div class="week-strip" id="weekStrip" style="display:none">
-  <button class="week-nav-btn" onclick="changeWeek(-1)" title="이전 주">‹</button>
-  <div class="week-days" id="weekDays"></div>
-  <button class="week-nav-btn" onclick="changeWeek(1)" title="다음 주">›</button>
-  <div class="week-gcal-section">
-    <div id="gcalStatus" class="gcal-status"></div>
-    <button class="gcal-connect-btn" id="gcalConnectBtn" onclick="connectGoogle()">🔗 Connect Google Calendar</button>
+  <div class="week-strip-inner" id="weekStripInner">
+    <button class="week-nav-btn" onclick="changeWeek(-1)" title="이전 주">‹</button>
+    <div class="week-days" id="weekDays"></div>
+    <button class="week-nav-btn" onclick="changeWeek(1)" title="다음 주">›</button>
+    <div class="week-gcal-section">
+      <div id="gcalStatus" class="gcal-status"></div>
+      <button class="gcal-connect-btn" id="gcalConnectBtn" onclick="connectGoogle()">🔗 Connect Google Calendar</button>
+    </div>
   </div>
+  <div class="week-strip-resize" id="weekStripResize"></div>
 </div>
 
 <!-- BOARD -->
@@ -1866,6 +1897,59 @@ async function fetchCalendarEvents() {
     calendarEvents = [];
   }
 }
+
+// ── WEEK STRIP RESIZE ─────────────────────────────────
+(function () {
+  const MIN_H = 60;
+  const MAX_H = 400;
+  const LS_H  = 'weekstrip_height';
+  const inner = document.getElementById('weekStripInner');
+  const handle = document.getElementById('weekStripResize');
+
+  const saved = parseInt(localStorage.getItem(LS_H), 10);
+  if (saved && saved >= MIN_H && saved <= MAX_H) inner.style.height = saved + 'px';
+
+  let startY = 0, startH = 0;
+
+  handle.addEventListener('mousedown', e => {
+    startY = e.clientY;
+    startH = inner.offsetHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      const h = Math.min(MAX_H, Math.max(MIN_H, startH + e.clientY - startY));
+      inner.style.height = h + 'px';
+    }
+    function onUp() {
+      localStorage.setItem(LS_H, inner.offsetHeight);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Touch support
+  handle.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    startH = inner.offsetHeight;
+
+    function onMove(e) {
+      const h = Math.min(MAX_H, Math.max(MIN_H, startH + e.touches[0].clientY - startY));
+      inner.style.height = h + 'px';
+    }
+    function onEnd() {
+      localStorage.setItem(LS_H, inner.offsetHeight);
+      handle.removeEventListener('touchmove', onMove);
+      handle.removeEventListener('touchend', onEnd);
+    }
+    handle.addEventListener('touchmove', onMove, { passive: true });
+    handle.addEventListener('touchend', onEnd);
+  }, { passive: true });
+})();
 
 // ── WEEK STRIP INIT ───────────────────────────────────
 document.getElementById('weekStrip').style.display = '';
