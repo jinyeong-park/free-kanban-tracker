@@ -634,7 +634,7 @@
 
 <script>
 // ── WEEK STRIP ────────────────────────────────────────
-const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // Google Cloud Console에서 발급한 OAuth Client ID로 교체
+const GOOGLE_CLIENT_ID = '__GOOGLE_CLIENT_ID__'; // .env → build.js → dist/index.html 로 주입됨
 const GOOGLE_SCOPES    = 'https://www.googleapis.com/auth/calendar.readonly';
 
 let weekOffset     = 0;   // 0 = 이번주, -1 = 지난주, +1 = 다음주

@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler pages dev .",
-    "build": "echo \"No build required for this static site\"",
-    "deploy": "wrangler pages deploy ."
+    "dev": "node build.js && wrangler pages dev dist",
+    "build": "node build.js",
+    "deploy": "node build.js && wrangler pages deploy dist"
   }
 }
