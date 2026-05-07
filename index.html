@@ -559,6 +559,17 @@
   <button onclick="resetAll()" style="margin-left:4px;background:rgba(255,255,255,0.15);border:none;border-radius:4px;padding:5px 10px;color:rgba(255,255,255,0.8);font-size:12px;cursor:pointer;" title="Clear all cards">🔄 Reset</button>
 </div>
 
+<!-- WEEK STRIP -->
+<div class="week-strip" id="weekStrip" style="display:none">
+  <button class="week-nav-btn" onclick="changeWeek(-1)" title="이전 주">‹</button>
+  <div class="week-days" id="weekDays"></div>
+  <button class="week-nav-btn" onclick="changeWeek(1)" title="다음 주">›</button>
+  <div class="week-gcal-section">
+    <div id="gcalStatus" class="gcal-status"></div>
+    <button class="gcal-connect-btn" id="gcalConnectBtn" onclick="connectGoogle()">🔗 Connect Google Calendar</button>
+  </div>
+</div>
+
 <!-- BOARD -->
 <div class="board" id="board">
   <!-- columns injected by JS -->
